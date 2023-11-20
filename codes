@@ -1,0 +1,716 @@
+###########################################################################################################################################
+#### Below are codes used to generate main figures and supplementary figures.##############################################################
+###########################################################################################################################################
+ 
+#### Figure 1 ############
+
+library(Seurat)
+library(SeuratObject)
+library(dplyr)
+library(pheatmap)
+library(BiocManager)
+library(multtest)
+library(metap)
+library(limma)
+library(ggplot2)
+library(cowplot)
+lamin_all <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 1/lamin_all.rds")
+lamin_all <- ScaleData(object = lamin_all, verbose = FALSE)
+lamin_all <- RunPCA(object = lamin_all, npcs = 30, verbose = FALSE)
+lamin_all <- RunUMAP(object = lamin_all, reduction = "pca", dims = 1:20) 
+lamin_all <- FindNeighbors(object = lamin_all, reduction = "pca", dims = 1:20)
+lamin_all <- FindClusters(lamin_all, resolution = 0.3)
+DimPlot(lamin_all, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 8)+  theme(text = element_text(size = 15)) + NoLegend()
+new.cluster.ids <-c("CD8 T cells","CD4 T cells", "B cells","Monocytes","NK cells","NK cells","CD4 T cells", "Platelet", "Dendritic cells","CD4 T cells","B cells","Monocytes","B cells")
+names(new.cluster.ids) <- levels(lamin_all)
+lamin_all <- RenameIdents(lamin_all, new.cluster.ids)
+DimPlot(lamin_all, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 8)+  theme(text = element_text(size = 15)) + NoLegend()
+lamin_all <- RunTSNE(object = lamin_all)
+DimPlot(object = lamin_all, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 13, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+#ggsave("pic1.png", height = 13, width = 11)
+
+DefaultAssay(lamin_all) <- "RNA"
+features<- c('CD47', "SIRPA" ) 
+DotPlot(lamin_all, features = features, cols = c("blue", "red", "green"), dot.scale = 20, group.by = "condition") + RotatedAxis() + theme(axis.text = element_text(size = 20)) + theme(axis.title.x = element_blank())+ theme(axis.title.y = element_blank())
+FeaturePlot(lamin_all, features = c("CD47"), raster=FALSE, reduction = "tsne", pt.size = 1, cols = c( "darkgray", "blue", "darkred"))
+FeaturePlot(lamin_all, features = c("SIRPA"), raster=FALSE, reduction = "tsne", pt.size = 1, cols = c( "darkgray", "blue", "darkred"))
+#ggsave("pic1.png", height = 6, width = 6 )
+VlnPlot(lamin_all, features = c("SIRPA"), raster=FALSE, pt.size = 1) + theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + NoLegend() + theme(axis.title.y = element_text(size = 25)) + theme(title = element_text(size = 20))
+VlnPlot(lamin_all, features = c("CD47"), pt.size = 0, raster=FALSE, split.by = "condition")
+
+RidgePlot(lamin_all, features = c( "CD47"), ncol = NULL) + NoLegend() + theme(title = element_text(size = 20)) + theme(axis.text.y = element_text(size = 25) ) + theme(axis.title.y = element_blank()) +theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20) )
+ggsave("pic1.png", height = 11, width = 8 )
+
+#### CD47 categorization of Immune cells
+count <- t(as.data.frame(lamin_all@assays$RNA@data))
+lamin_all$CD47exp <- count[,"CD47"]
+lamin_all$CD47_level <- "NA"
+lamin_all$CD47_level[which(lamin_all$CD47exp < 0.5)] <- "CD47 Low"
+lamin_all$CD47_level[which((lamin_all$CD47exp > 0.5) & (lamin_all$CD47exp < 1.5))] <- "CD47 Inter."
+lamin_all$CD47_level[which(lamin_all$CD47exp > 1.5)] <- "CD47 High"
+table(lamin_all$CD47_level)
+DefaultAssay(lamin_all) <- "RNA"
+Idents(lamin_all) <- "CD47_level"
+levels(lamin_all)
+levels(lamin_all)<- c("CD47 Low", "CD47 Inter.", "CD47 High")
+VlnPlot(lamin_all, "CD47")
+DimPlot(object = lamin_all, reduction = "tsne", split.by ="CD47_level",  label = TRUE, repel = TRUE,  label.size = 12, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+FeaturePlot(lamin_all, features = c("CD47"), raster=FALSE,label = F, reduction = "tsne", pt.size = 1, cols = c( "darkgray", "blue", "darkred"), split.by = "CD47_level") + theme(axis.title.x.top = element_text(size = 15))
+FeaturePlot(lamin_all, features = c("SIRPA"), raster=FALSE, reduction = "tsne", pt.size = 1, cols = c( "gray96", "red3"))
+
+act_cytx <- c("CD47","TLR7","STAT1", "STAT2", "IRF7", "IRF9", "CD69", "ISG15", "LY6E", "IFI6","MX1", "IFIT2", "IFIT3", "IFIT5", "OASL", "IFNG","GZMB","GZMA","GZMH", "GZMK",  "NKG7", "IL2RB","PRF1", "GNLY", "KLRB1", "PDCD1", "LAG3", "TIGIT")
+DotPlot(lamin_all, features = act_cytx, cols = c("blue", "red", "green"), dot.scale = 20) + RotatedAxis() + theme(axis.text = element_text(size = 20)) + theme(axis.title.x = element_blank())+ theme(axis.title.y = element_blank())
+ave <- AverageExpression(lamin_all)$RNA
+gene <- intersect(rownames(ave), act_cytx)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+
+VlnPlot(lamin_all, features = c("CD69"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_all, features = c("LY6E"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_all, features = c("GZMB"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_all, features = c("KLRB1"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_all, features = c("GNLY"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+##### Figure 2: Monocytes analysis ############
+
+library(Seurat)
+library(SeuratObject)
+library(dplyr)
+library(pheatmap)
+library(BiocManager)
+library(multtest)
+library(metap)
+library(limma)
+library(ggplot2)
+library(cowplot)
+monocyte_dc <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 2/monocyte_dc.rds")
+monocyte_dc <- ScaleData(object = monocyte_dc, verbose = FALSE)
+monocyte_dc <- RunPCA(object = monocyte_dc, npcs = 30, verbose = FALSE)
+monocyte_dc <- RunUMAP(object = monocyte_dc, reduction = "pca", dims = 1:20) 
+monocyte_dc <- FindNeighbors(object = monocyte_dc, reduction = "pca", dims = 1:20)
+monocyte_dc <- FindClusters(monocyte_dc, resolution = 0.1)
+DimPlot(monocyte_dc, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 8)+  theme(text = element_text(size = 15)) + NoLegend()
+DefaultAssay(monocyte_dc) <- "RNA"
+new.cluster.ids <-c("CD1c DC","CD14 Monocytes","CD14 Monocytes","CD14 Monocytes","CD1c DC","CD1c DC","CD16 Monocytes", "AS DC", "CD1c DC", "CLEC9A DC", "pDC", "CD1c DC")
+names(new.cluster.ids) <- levels(monocyte_dc)
+monocyte_dc <- RenameIdents(monocyte_dc, new.cluster.ids)
+monocyte_dc <- RunTSNE(object = monocyte_dc)
+DimPlot(object = monocyte_dc, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 10, pt.size = 0) + theme(text = element_text(size = 25)) + NoLegend()
+#ggsave("pic1.png", height = 7, width = 10)
+VlnPlot(monocyte_dc, features = c("CD47"), pt.size = 0, raster=FALSE) + NoLegend() + theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+lamin_Monocytes <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 2/Monocytes/lamin_Monocytes.rds")
+lamin_Monocytes <- FindVariableFeatures(lamin_Monocytes, selection.method = "vst", nfeatures = 2000)
+lamin_Monocytes<- ScaleData(object = lamin_Monocytes, verbose = FALSE)
+lamin_Monocytes<- RunPCA(object = lamin_Monocytes, npcs = 30, verbose = FALSE)
+lamin_Monocytes<- RunUMAP(object = lamin_Monocytes, reduction = "pca", dims = 1:20) 
+lamin_Monocytes<- FindNeighbors(object = lamin_Monocytes, reduction = "pca", dims = 1:20)
+lamin_Monocytes<- FindClusters(lamin_Monocytes, resolution = 0.3)
+DimPlot(lamin_Monocytes, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 10) +  theme(text = element_text(size = 25)) + NoLegend()
+count <- t(as.data.frame(lamin_Monocytes@assays$RNA@data))
+lamin_Monocytes$CD47exp <- count[,"CD47"]
+lamin_Monocytes$CD47_level <- "NA"
+lamin_Monocytes$CD47_level[which(lamin_Monocytes$CD47exp < 0.5)] <- "CD47 Low"
+lamin_Monocytes$CD47_level[which((lamin_Monocytes$CD47exp > 0.5) & (lamin_Monocytes$CD47exp < 1.5))] <- "CD47 Inter."
+lamin_Monocytes$CD47_level[which(lamin_Monocytes$CD47exp > 1.5)] <- "CD47 High"
+table(lamin_Monocytes$CD47_level)
+DefaultAssay(lamin_Monocytes) <- "RNA"
+Idents(lamin_Monocytes) <- "CD47_level"
+levels(lamin_Monocytes)
+levels(lamin_Monocytes)<- c("CD47 Low", "CD47 Inter.", "CD47 High")
+VlnPlot(lamin_Monocytes, "CD47")
+### pathway analysis for figure 2b
+library(Signac)
+library(monocle3)
+library(Matrix)
+library(patchwork)
+set.seed(1234)
+library(SCORPIUS)
+library(patchwork)
+library(tidyverse)
+library(magrittr)
+library(ReactomePA)
+library(clusterProfiler)
+library(enrichplot)
+library(DOSE)
+library(biomaRt)
+library(org.Hs.eg.db)
+library(ChIPseeker)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+library(monocle)
+library(ggrepel)
+library(EnhancedVolcano)
+library(Nebulosa)
+library(BiocFileCache)
+library(RColorBrewer)
+library(RColorBrewer)
+library(Nebulosa)
+library(fgsea)
+library(msigdbr)
+library(ReactomeGSA)
+library(pathview)
+geneSets_H = msigdbr(species = "Homo sapiens", category = "H")
+head(geneSets_H)
+geneSets = geneSets_H %>% split(x = .$gene_symbol, f = .$gs_name)
+lamin_Monocytes <-  AddModuleScore(lamin_Monocytes, list(geneSets[[1]]), pool = NULL, nbin = 24, ctrl = 100, k = FALSE, assay = NULL, name = names(geneSets[1]), seed = 1, search = FALSE)
+for (i in 1:50){
+  lamin_Monocytes <-  AddModuleScore(lamin_Monocytes, list(geneSets[[i]]), pool = NULL, nbin = 24, ctrl = 100, k = FALSE, assay = NULL, name = names(geneSets[i]), seed = 1, search = FALSE)
+  
+}
+head(lamin_Monocytes[])
+colnames(lamin_Monocytes@meta.data)
+score <- lamin_Monocytes@meta.data[,c(41, 47,51,63,64,65,66,67,77,80,84,85)]
+ave<- aggregate(score, list(score$CD47_level),mean)
+rownames(ave) <- ave$Group.1
+ave <- ave[,-c(2)]
+ave <- ave[,-c(1)]
+ave1 <- t(ave)
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+heatmap(ave1,col=(colfunc(100)),Colv=NA, scale = "row",cluster_cols = FALSE, density.info = "none", trace = "none", border_color=NA, fontsize = 4, margins = c(5, 35))
+VlnPlot(object = Monocytes_combined, "HALLMARK_INFLAMMATORY_RESPONSE1", raster=FALSE, pt.size = 0 ) + stat_summary(fun = median, geom='point', size = 15, colour = "black", shape = 45) + NoLegend() + theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 25) ) + theme(axis.text.y = element_text(size = 25)) + theme(title = element_text(size = 20))
+c("HALLMARK_INTERFERON_ALPHA_RESPONSE1", "HALLMARK_COMPLEMENT1", "HALLMARK_INFLAMMATORY_RESPONSE1" , "HALLMARK_INTERFERON_GAMMA_RESPONSE1" )
+
+##### Figure 2b
+
+monocytes <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 2/monocyte/Monocytes.rds")
+monocytes <- FindVariableFeatures(monocytes, selection.method = "vst", nfeatures = 2000)
+monocytes <- ScaleData(object = monocytes, verbose = FALSE)
+monocytes <- RunPCA(object = monocytes, npcs = 30, verbose = FALSE)
+monocytes <- RunUMAP(object = monocytes, reduction = "pca", dims = 1:20) 
+monocytes <- FindNeighbors(object = monocytes, reduction = "pca", dims = 1:20)
+monocytes <- FindClusters(monocytes, resolution = 0.5)
+DimPlot(monocytes, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 8)+  theme(text = element_text(size = 15)) + NoLegend()
+count <- t(as.data.frame(monocytes@assays$RNA@data))
+
+#IRF7
+monocytes$IRF7exp <- count[,"IRF7"]
+monocytes$IRF7_level <- "NA"
+monocytes$IRF7_level[which(monocytes$IRF7exp < 0.5)] <- "IRF7 Low"
+monocytes$IRF7_level[which(monocytes$IRF7exp > 0.5)] <- "IRF7 High"
+table(monocytes$IRF7_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "IRF7_level"
+levels(monocytes)
+levels(monocytes)<- c("IRF7 Low", "IRF7 High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+#IFNAR1
+monocytes$IFNAR1exp <- count[,"IFNAR1"]
+monocytes$IFNAR1_level <- "NA"
+monocytes$IFNAR1_level[which(monocytes$IFNAR1exp < 0.5)] <- "IFNAR1 Low"
+monocytes$IFNAR1_level[which(monocytes$IFNAR1exp > 0.5)] <- "IFNAR1 High"
+table(monocytes$IFNAR1_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "IFNAR1_level"
+levels(monocytes)
+levels(monocytes)<- c("IFNAR1 Low", "IFNAR1 High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+#MX1
+monocytes$MX1exp <- count[,"MX1"]
+monocytes$MX1_level <- "NA"
+monocytes$MX1_level[which(monocytes$MX1exp < 0.5)] <- "MX1 Low"
+monocytes$MX1_level[which(monocytes$MX1exp > 0.5)] <- "MX1 High"
+table(monocytes$MX1_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "MX1_level"
+levels(monocytes)
+levels(monocytes)<- c("MX1 Low", "MX1 High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#ISG15
+monocytes$ISG15exp <- count[,"ISG15"]
+monocytes$ISG15_level <- "NA"
+monocytes$ISG15_level[which(monocytes$ISG15exp < 0.5)] <- "ISG15 Low"
+monocytes$ISG15_level[which(monocytes$ISG15exp > 0.5)] <- "ISG15 High"
+table(monocytes$ISG15_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "ISG15_level"
+levels(monocytes)
+levels(monocytes)<- c("ISG15 Low", "ISG15 High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#CD86
+monocytes$CD86exp <- count[,"CD86"]
+monocytes$CD86_level <- "NA"
+monocytes$CD86_level[which(monocytes$CD86exp < 0.5)] <- "CD86 Low"
+monocytes$CD86_level[which(monocytes$CD86exp > 0.5)] <- "CD86 High"
+table(monocytes$CD86_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "CD86_level"
+levels(monocytes)
+levels(monocytes)<- c("CD86 Low", "CD86 High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#IL1B
+monocytes$IL1Bexp <- count[,"IL1B"]
+monocytes$IL1B_level <- "NA"
+monocytes$IL1B_level[which(monocytes$IL1Bexp < 0.5)] <- "IL1B Low"
+monocytes$IL1B_level[which(monocytes$IL1Bexp > 0.5)] <- "IL1B High"
+table(monocytes$IL1B_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "IL1B_level"
+levels(monocytes)
+levels(monocytes)<- c("IL1B Low", "IL1B High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#NKG7
+monocytes$NKG7exp <- count[,"NKG7"]
+monocytes$NKG7_level <- "NA"
+monocytes$NKG7_level[which(monocytes$NKG7exp < 0.5)] <- "NKG7 Low"
+monocytes$NKG7_level[which(monocytes$NKG7exp > 0.5)] <- "NKG7 High"
+table(monocytes$NKG7_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "NKG7_level"
+levels(monocytes)
+levels(monocytes)<- c("NKG7 Low", "NKG7 High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#TNF
+monocytes$TNFexp <- count[,"TNF"]
+monocytes$TNF_level <- "NA"
+monocytes$TNF_level[which(monocytes$TNFexp < 0.5)] <- "TNF Low"
+monocytes$TNF_level[which(monocytes$TNFexp > 0.5)] <- "TNF High"
+table(monocytes$TNF_level)
+DefaultAssay(monocytes) <- "RNA"
+Idents(monocytes) <- "TNF_level"
+levels(monocytes)
+levels(monocytes)<- c("TNF Low", "TNF High")
+VlnPlot(monocytes, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+####### Suppl. Figure 1 D,E
+VlnPlot(monocytes, features = c("CD47"), pt.size = 1, raster=FALSE) + NoLegend()
+CD47_low <- subset(monocytes, subset = CD47<0.5)
+CD47_hi <- subset(monocytes, subset = CD47>0.5)
+CD47_low$CD47_expression <- "CD47 low"
+CD47_hi$CD47_expression <- "CD47 high"
+anchors <- FindIntegrationAnchors(object.list = list(CD47_low, CD47_hi), dims = 1:20)
+CD47_combined <- IntegrateData(anchorset = anchors, dims = 1:20)
+DefaultAssay(object = CD47_combined) <- "integrated"
+CD47_combined<-readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 2/monocyte/CD47_combined.rds")
+Idents(CD47_combined) <- "CD47_expression"
+DefaultAssay(CD47_combined) <- "RNA"
+VlnPlot(CD47_combined, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+CD47_combined <- ScaleData(object = CD47_combined, features = rownames(CD47_combined), verbose = FALSE)
+CD47_hi_low <- FindMarkers(CD47_combined, ident.1 = "CD47 high", ident.2 = "CD47 low", min.pct = 0, logfc.threshold = 0)
+saveRDS(CD47_hi_low, file = "C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 2/monocyte/CD47_hi_low.rds")
+high_vs_loww <- FindMarkers(CD47_combined, ident.1 = "CD47 low", ident.2 = "CD47 high", min.pct = 0.1, logfc.threshold = 0.1)
+EnhancedVolcano(high_vs_loww, lab = rownames(high_vs_loww), x = "avg_log2FC", y = "p_val_adj", xlab = bquote(~avg_Log[2]~ 'fold change'),  title = "Monocytes: CD47 high vs CD47 low cells", subtitle = bquote(italic("avg_log2FC")), labSize = 6, pointSize = 2, axisLabSize=30, titleLabSize=25, subtitleLabSize=20, captionLabSize=15, legendPosition = "none", pCutoff = 10e-10,  FCcutoff = 0.05, col=c('grey', 'grey', 'grey', 'red3'), colAlpha = 1, xlim = c(-1, 1),ylim = c(0,310))
+
+EnhancedVolcano(CD47_hi_low, lab = rownames(CD47_hi_low), x = "avg_log2FC", y = "p_val_adj", xlab = bquote(~avg_Log[2]~ 'fold change'),  title = "Monocytes: CD47 high vs CD47 low cells", subtitle = bquote(italic("avg_log2FC")), labSize = 6, pointSize = 2, axisLabSize=30, titleLabSize=25, subtitleLabSize=20, captionLabSize=15, legendPosition = "none", pCutoff = 10e-100,  FCcutoff = 0.05, col=c('grey', 'grey', 'grey', 'red3'), colAlpha = 1, xlim = c(-1, 1),ylim = c(0,310))
+ggsave("pic1.png", height = 12, width = 10 )
+lamin <- rownames(CD47_hi_low)
+go_enrich <- enrichGO(gene =lamin , OrgDb = "org.Hs.eg.db",  keyType = 'SYMBOL', readable = T, ont = "BP", pvalueCutoff = 0.05, qvalueCutoff = 0.05)
+dotplot(go_enrich, showCategory = 10, title = "GO: Monocytes: CD47 high vs CD47 low cells")
+top100 <- slice_max(CD47_hi_low, n = 100, order_by = avg_log2FC)
+lamin <- rownames(top100)
+
+go_enrich@result
+go_enrich@result %>% head()
+write.csv(go_enrich,"GO.csv")
+go_enrich@result %>%
+  filter(Description== "response to virus" |
+           Description=="positive regulation of leukocyte activation" | 
+           Description=="positive regulation of cytokine production"|
+           Description=="chemokine-mediated signaling pathway" |
+           Description=="natural killer cell mediated cytotoxicity" |
+           Description=="type I interferon production" |
+           Description=="positive regulation of lymphocyte activation" |
+           Description=="cellular response to type I interferon" |
+           Description=="regulation of adaptive immune response" |
+           Description=="regulation of T cell activation" |
+           Description=="complement activation, classical pathway"  )%>%
+  arrange(desc(p.adjust)) %>%
+  ggplot(aes(y=factor(Description), x= Count, fill= p.adjust)) +
+  geom_bar(stat = "identity", width = 0.7, size=20)  + 
+  theme(axis.text.y = element_text(size=20),
+        axis.title.y = element_blank()) +
+  scale_fill_gradient (low= "blue", high= "red") +
+  ggtitle( "Monocytes: CD47 high vs CD47 low cells") + theme(title = element_text(size = 25))
+#ggsave("pic1.png", height = 6, width = 6 )
+
+
+######### Figure 2: pDC analysis
+
+lamin_pDC <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 2/Figure 2b/lamin_pDC.rds")
+lamin_pDC <- FindVariableFeatures(lamin_pDC, selection.method = "vst", nfeatures = 2000)
+lamin_pDC<- ScaleData(object = lamin_pDC, verbose = FALSE)
+lamin_pDC<- RunPCA(object = lamin_pDC, npcs = 30, verbose = FALSE)
+lamin_pDC<- RunUMAP(object = lamin_pDC, reduction = "pca", dims = 1:20) 
+lamin_pDC<- FindNeighbors(object = lamin_pDC, reduction = "pca", dims = 1:20)
+lamin_pDC<- FindClusters(lamin_pDC, resolution = 0.3)
+DimPlot(lamin_pDC, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 10) +  theme(text = element_text(size = 25)) + NoLegend()
+DefaultAssay(lamin_pDC) <- "RNA"
+
+count <- t(as.data.frame(lamin_pDC@assays$RNA@data))
+lamin_pDC$CD47exp <- count[,"CD47"]
+lamin_pDC$CD47_level <- "NA"
+lamin_pDC$CD47_level[which(lamin_pDC$CD47exp < 0.5)] <- "CD47 Low"
+lamin_pDC$CD47_level[which((lamin_pDC$CD47exp > 0.5) & (lamin_pDC$CD47exp < 1.5))] <- "CD47 Inter."
+lamin_pDC$CD47_level[which(lamin_pDC$CD47exp > 1.5)] <- "CD47 High"
+table(lamin_pDC$CD47_level)
+DefaultAssay(lamin_pDC) <- "RNA"
+Idents(lamin_pDC) <- "CD47_level"
+levels(lamin_pDC)
+levels(lamin_pDC)<- c("CD47 Low", "CD47 Inter.", "CD47 High")
+VlnPlot(lamin_pDC, "CD47")
+
+ave <- AverageExpression(lamin_pDC)$RNA
+IFNgenes <-c("TLR7","STAT1", "STAT2", "IRF7", "IRF9", "IRF8", "ISG15", "LY6E", "IFI6", "ISG20", "MX1", "OAS1", "OAS2", "OAS3",  "IFIT2", "IFIT3", "IFIT5",  "TRIM22", "TRIM25", "TRIM32", "TRIM69", "IFITM2", "IFNLR1", "IFNAR1", "IFNGR1")
+gene <- intersect(rownames(ave), IFNgenes)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+antigenpretn <-c("HLA-C", "HLA-A", "HLA-E", "HLA-B", "HLA-F","HLA-DB5", "HLA-DB1", "HLA-DRA", "HLA-DQA1", "HLA-DPA1", "HLA-DMA", "MICA", "MICB", "LMP2",  "CIITA", "NLRC5" ,"CD40", "CD80", "B2M", " ICAM1", " ICAM2", " ICAM3")
+gene <- intersect(rownames(ave), antigenpretn)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+
+### Gene ontology analysis
+
+CD47hi_low <- FindMarkers(pDC_combined, ident.1 = "CD47 High", ident.2 = "CD47 Low", min.pct = 0.1, logfc.threshold = 0.1)
+saveRDS(CD47hi_low, file = "C:/Users/au672897/Desktop/CD47 project/files/pDC/CD47hi_low.rds" )
+top100_HIV_TLR9_pDC <- slice_max(CD47hi_low, n = 100, order_by = avg_log2FC)
+top100gene_HIV_TLR9_pDC <- rownames(top100_HIV_TLR9_pDC)
+top100gene_HIV_TLR9_pDC
+go_enrich <- enrichGO(gene =top100gene_HIV_TLR9_pDC , OrgDb = "org.Hs.eg.db",  keyType = 'SYMBOL', readable = T, ont = "BP", pvalueCutoff = 0.05, qvalueCutoff = 0.05)
+
+GO_analysis <- enrichGO(gene, OrgDb = org.Hs.eg.db, ont = "ALL", pAdjustMethod = "BH", pvalueCutoff = 1, qvalueCutoff = 1, readable = TRUE, pool = TRUE)
+GO_analysis
+
+dotplot(go_enrich, showCategory = 20) + 
+  theme(axis.text.y = element_text(size=20),
+        axis.title.y = element_blank()) +
+  scale_fill_gradient (low= "blue", high= "red") +
+  ggtitle("pDC: CD47 High vs CD47 Low cells") + theme(title = element_text(size = 25))
+
+write.csv(go_enrich,"GO.csv")
+go_enrich@result
+go_enrich@result %>% head()
+
+go_enrich@result %>%
+  filter(Description== "regulation of viral process" |
+           Description=="defense response to virus" | 
+           Description=="response to interferon-beta"|
+           Description=="response to interferon-alpha"|
+           Description== "type I interferon signaling pathway" |
+           Description=="cytokine-mediated signaling pathway" |
+           Description=="regulation of innate immune response" |
+           Description=="defense response to symbiont" |
+           Description=="positive regulation of innate immune response" |
+           Description=="negative regulation of viral genome replication" |
+           Description=="negative regulation of viral process" |
+           Description=="defense response to symbiont" |
+           Description=="complement activation, classical pathway" |
+           Description=="cellular response to type I interferon" )%>%
+  arrange(desc(p.adjust)) %>%
+  ggplot(aes(y=factor(Description), x= Count, fill= p.adjust)) +
+  geom_bar(stat = "identity", width = 0.7, size=20)  + 
+  theme(axis.text.y = element_text(size=20),
+        axis.title.y = element_blank()) +
+  scale_fill_gradient (low= "blue", high= "red") +
+  ggtitle("pDC: CD47 High vs CD47 Low cells") + theme(title = element_text(size = 25))
+
+
+#### Figure 3 ##########
+lamin_NKcells <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 3/lamin_NKcells.rds")
+lamin_NKcells <- FindVariableFeatures(lamin_NKcells, selection.method = "vst", nfeatures = 2000)
+lamin_NKcells<- ScaleData(object = lamin_NKcells, verbose = FALSE)
+lamin_NKcells<- RunPCA(object = lamin_NKcells, npcs = 30, verbose = FALSE)
+lamin_NKcells<- RunUMAP(object = lamin_NKcells, reduction = "pca", dims = 1:20) 
+lamin_NKcells<- FindNeighbors(object = lamin_NKcells, reduction = "pca", dims = 1:20)
+lamin_NKcells<- FindClusters(lamin_NKcells, resolution = 0.1)
+DimPlot(lamin_NKcells, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 12) +  theme(text = element_text(size = 25)) + NoLegend()
+lamin_NKcells<-RenameIdents(lamin_NKcells, "0"= "CD56dim NK cells", "1"= "CD56bright NK cells", "2"= "CD16neg NK cells", "3"= "NK/T cells")
+lamin_NKcells <- RunTSNE(object = lamin_NKcells)
+DimPlot(object = lamin_NKcells, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 14, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+DefaultAssay(lamin_NKcells) <- "RNA"
+VlnPlot(lamin_NKcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 18)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_NKcells, features = c("ISG15"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 18)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_NKcells, features = c("NKG7"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 18)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+VlnPlot(lamin_NKcells, features = c("PRF1"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 18)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#ggsave("pic1.png", height = 7, width = 5 )
+count <- t(as.data.frame(lamin_NKcells@assays$RNA@data))
+lamin_NKcells$CD47exp <- count[,"CD47"]
+lamin_NKcells$CD47_level <- "NA"
+lamin_NKcells$CD47_level[which(lamin_NKcells$CD47exp < 0.5)] <- "CD47 Low"
+lamin_NKcells$CD47_level[which((lamin_NKcells$CD47exp > 0.5) & (lamin_NKcells$CD47exp < 1.5))] <- "CD47 Inter."
+lamin_NKcells$CD47_level[which(lamin_NKcells$CD47exp > 1.5)] <- "CD47 High"
+table(lamin_NKcells$CD47_level)
+DefaultAssay(lamin_NKcells) <- "RNA"
+Idents(lamin_NKcells) <- "CD47_level"
+levels(lamin_NKcells)
+levels(lamin_NKcells)<- c("CD47 Low", "CD47 Inter.", "CD47 High")
+VlnPlot(lamin_NKcells, "CD47")
+NKgenes <- c("KLRK1", "KLRC1", "NCR3", "KLRB1","ITGB2", "KLRD1", "FCGR3A","CD47","MX1","ISG15", "LY6E", "IFI6", "ISG20","TRIM22","IFIT3",  "NKG7", "GNLY","PRF1", "GZMB", "CCL5", "IFNG")
+DotPlot(lamin_NKcells, features = NKgenes, cols = c("blue", "red", "green"), dot.scale = 15, group.by= "CD47_level") + RotatedAxis()+ theme(axis.text = element_text(size = 25)) + theme(axis.title.x = element_blank())+theme(axis.title.y = element_blank())
+
+all <- c( "NKG7", "GNLY","PRF1","TNFSF10", "KLRB1", "GZMK", "GZMB", "TNF", "CXCL3", "CCL5", "CCL3", "CCL2", "CCL4", "CXCR2", "TNFSF14", "IL1B", "IL1RN",  "TNFAIP3", "TNFAIP2", "IL10RB", "CD40", "CD38", "CD81", "HLA-DRA", "HLA-DMA", "HLA-C", "HLA-A", "HLA-E", "HLA-B", "HLA-F", "B2M",  "SLAMF7",  "IRF7", "ISG15", "LY6E", "IFI6", "ISG20", "MX1", "OAS1", "OAS2", "OAS3", "PARP12",  "IFIT2", "IFIT3", "IFIT5", "TRIM22", "TRIM25", "TRIM32", "TRIM69",  "IRF8" )
+lamin<- c("TLR9", "TLR7","STAT1", "STAT2", "IRF7", "ISG15", "LY6E", "IFI6", "ISG20", "MX1", "OAS1", "OAS2", "OAS3", "PARP12",  "IFIT2", "IFIT3", "IFIT5",  "RBBP6", "SHFL", "TRIM22", "TRIM25", "TRIM32", "TRIM69",  "IRF1", "IRF3", "IRF9", "CGAS", "USP18", "SOCS1", "SOCS3", "IFITM2", "IFNL1", "IFNLR1", "IFNAR1", "IFNAR2", "IFNGR1", "IL10RB", "CD40", "CD38", "CD81", "HLA-DRA", "HLA-DMA", "HLA-C", "HLA-A", "HLA-E", "HLA-B", "HLA-F", "B2M", "USP8", "USP15", "USP24", "USP48", "USP3", "SLAMF7", "SOX4",  "ARMCX3", "TPR", "AHI1", "UBTF", "LINC02812", "CLINT1", "TMEM123", "NEK8", "OXR1", "TMX3")
+ISG <- c( "STAT1", "STAT2", "ISG15", "LY6E", "IFI6", "ISG20", "MX1", "CD47", "OAS1", "OAS2", "OAS3", "PARP12",  "IFIT2", "IFIT3", "IFIT5",  "RBBP6", "SHFL", "TRIM22", "TRIM25", "TRIM32", "TRIM69",  "IRF1", "IRF3", "IRF9", "CGAS", "USP18", "SOCS1", "SOCS3", "IFITM2", "IFNL1", "IFNLR1", "IFNAR1", "IFNAR2", "IFNGR1")
+proinflammation <- c("TLR9", "TNF", "ZFP36", "SPARC", "TNFSF4", "PF4V1",  "CXCL3", "CXCL5", "PPBP", "CCL5", "CCL3", "CXCL3", "CCL2", "CCL4", "CXCR2", "FFAR2", "TNFSF14", "IL1B", "IL1RN", "SERPINE1", "PDE4D", "IL6", "TNFAIP3", "NLRP3", "TRIB1", "NFKBIA", "JUND", "JUN", "FOS", "F2R", "PTGS2", "EIF1", "DUSP1", "AREG", "BTG1", "KLF6", "LAPTM5", "MYD88", "CD36", "LIPA", "RETN", "ANXA2", "TMEM176A", "TMEM176A")
+all1 <- c("NKG7", "GNLY","PRF1","TNFSF10", "KLRB1", "GZMK", "GZMB", "TNF", "CXCL3", "CCL5", "CCL3", "CCL2","HLA-DRA", "HLA-DMA", "HLA-C", "HLA-A", "HLA-E", "HLA-B", "HLA-F", "B2M",  "SLAMF7", "ISG15", "LY6E", "IFI6", "ISG20", "MX1", "OAS1", "OAS2", "OAS3", "PARP12",  "IFIT2", "IFIT3", "IFIT5", "TRIM22", "TRIM25", "TRIM32", "TRIM69",  "IRF8")
+ave <- AverageExpression(NK_combined)$RNA
+gene <- intersect(rownames(ave), all1)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+
+
+#MX1
+lamin_NKcells$MX1exp <- count[,"MX1"]
+lamin_NKcells$MX1_level <- "NA"
+lamin_NKcells$MX1_level[which(lamin_NKcells$MX1exp < 0.5)] <- "MX1 Low"
+lamin_NKcells$MX1_level[which(lamin_NKcells$MX1exp > 0.5)] <- "MX1 High"
+table(lamin_NKcells$MX1_level)
+DefaultAssay(lamin_NKcells) <- "RNA"
+Idents(lamin_NKcells) <- "MX1_level"
+levels(lamin_NKcells)
+levels(lamin_NKcells)<- c("MX1 Low", "MX1 High")
+VlnPlot(lamin_NKcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#NKG7
+lamin_NKcells$NKG7exp <- count[,"NKG7"]
+lamin_NKcells$NKG7_level <- "NA"
+lamin_NKcells$NKG7_level[which(lamin_NKcells$NKG7exp < 0.5)] <- "NKG7 Low"
+lamin_NKcells$NKG7_level[which(lamin_NKcells$NKG7exp > 0.5)] <- "NKG7 High"
+table(lamin_NKcells$NKG7_level)
+DefaultAssay(lamin_NKcells) <- "RNA"
+Idents(lamin_NKcells) <- "NKG7_level"
+levels(lamin_NKcells)
+levels(lamin_NKcells)<- c("NKG7 Low", "NKG7 High")
+VlnPlot(lamin_NKcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#PRF1
+lamin_NKcells$PRF1exp <- count[,"PRF1"]
+lamin_NKcells$PRF1_level <- "NA"
+lamin_NKcells$PRF1_level[which(lamin_NKcells$PRF1exp < 0.5)] <- "PRF1 Low"
+lamin_NKcells$PRF1_level[which(lamin_NKcells$PRF1exp > 0.5)] <- "PRF1 High"
+table(lamin_NKcells$PRF1_level)
+DefaultAssay(lamin_NKcells) <- "RNA"
+Idents(lamin_NKcells) <- "PRF1_level"
+levels(lamin_NKcells)
+levels(lamin_NKcells)<- c("PRF1 Low", "PRF1 High")
+VlnPlot(lamin_NKcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#GZMB
+lamin_NKcells$GZMBexp <- count[,"GZMB"]
+lamin_NKcells$GZMB_level <- "NA"
+lamin_NKcells$GZMB_level[which(lamin_NKcells$GZMBexp < 0.5)] <- "GZMB Low"
+lamin_NKcells$GZMB_level[which(lamin_NKcells$GZMBexp > 0.5)] <- "GZMB High"
+table(lamin_NKcells$GZMB_level)
+DefaultAssay(lamin_NKcells) <- "RNA"
+Idents(lamin_NKcells) <- "GZMB_level"
+levels(lamin_NKcells)
+levels(lamin_NKcells)<- c("GZMB Low", "GZMB High")
+VlnPlot(lamin_NKcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#GNLY
+lamin_NKcells$GNLYexp <- count[,"GNLY"]
+lamin_NKcells$GNLY_level <- "NA"
+lamin_NKcells$GNLY_level[which(lamin_NKcells$GNLYexp < 0.5)] <- "GNLY Low"
+lamin_NKcells$GNLY_level[which(lamin_NKcells$GNLYexp > 0.5)] <- "GNLY High"
+table(lamin_NKcells$GNLY_level)
+DefaultAssay(lamin_NKcells) <- "RNA"
+Idents(lamin_NKcells) <- "GNLY_level"
+levels(lamin_NKcells)
+levels(lamin_NKcells)<- c("GNLY Low", "GNLY High")
+VlnPlot(lamin_NKcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+
+##### Figure 4 ########
+
+library(Seurat)
+library(SeuratObject)
+library(dplyr)
+library(pheatmap)
+library(BiocManager)
+library(multtest)
+library(metap)
+library(limma)
+library(ggplot2)
+library(cowplot)
+lamin_CD8Tcells<- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 4/lamin_CD8Tcells.rds")
+lamin_CD8Tcells <- FindVariableFeatures(lamin_CD8Tcells, selection.method = "vst", nfeatures = 2000)
+lamin_CD8Tcells<- ScaleData(object = lamin_CD8Tcells, verbose = FALSE)
+lamin_CD8Tcells<- RunPCA(object = lamin_CD8Tcells, npcs = 30, verbose = FALSE)
+lamin_CD8Tcells<- RunUMAP(object = lamin_CD8Tcells, reduction = "pca", dims = 1:20) 
+lamin_CD8Tcells<- FindNeighbors(object = lamin_CD8Tcells, reduction = "pca", dims = 1:20)
+lamin_CD8Tcells<- FindClusters(lamin_CD8Tcells, resolution = 0.2)
+DimPlot(lamin_CD8Tcells, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 10) +  theme(text = element_text(size = 25)) + NoLegend()
+DefaultAssay(lamin_CD8Tcells) <- "RNA"
+new.cluster.ids <-c("Naive CD8+ T","Effector Mem. CD8+ T","Central Mem. CD8+ T","Effector CD8+ T","Effector CD8+ T")
+names(new.cluster.ids) <- levels(lamin_CD8Tcells)
+lamin_CD8Tcells <- RenameIdents(lamin_CD8Tcells, new.cluster.ids)
+lamin_CD8Tcells <- RunTSNE(object = lamin_CD8Tcells)
+DimPlot(object = lamin_CD8Tcells, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 13, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+VlnPlot(lamin_CD8Tcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+RidgePlot(lamin_CD8Tcells, features = c( "CD47"), ncol = NULL) + NoLegend() + theme(title = element_text(size = 20)) + theme(axis.text.y = element_text(size = 25) ) + theme(axis.title.y = element_blank()) +theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20) )
+RidgePlot(lamin_CD8Tcells, features = c( "PRF1"), ncol = NULL) + NoLegend() + theme(title = element_text(size = 20)) + theme(axis.text.y = element_text(size = 25) ) + theme(axis.title.y = element_blank()) +theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20) )
+
+count <- t(as.data.frame(lamin_CD8Tcells@assays$RNA@data))
+lamin_CD8Tcells$CD47exp <- count[,"CD47"]
+lamin_CD8Tcells$CD47_level <- "NA"
+lamin_CD8Tcells$CD47_level[which(lamin_CD8Tcells$CD47exp < 0.5)] <- "CD47 Low"
+lamin_CD8Tcells$CD47_level[which((lamin_CD8Tcells$CD47exp > 0.5) & (lamin_CD8Tcells$CD47exp < 1.5))] <- "CD47 Inter."
+lamin_CD8Tcells$CD47_level[which(lamin_CD8Tcells$CD47exp > 1.5)] <- "CD47 High"
+table(lamin_CD8Tcells$CD47_level)
+DefaultAssay(lamin_CD8Tcells) <- "RNA"
+Idents(lamin_CD8Tcells) <- "CD47_level"
+levels(lamin_CD8Tcells)
+levels(lamin_CD8Tcells)<- c("CD47 Low", "CD47 Inter.", "CD47 High")
+VlnPlot(lamin_CD8Tcells, "CD47")
+ave <- AverageExpression(lamin_CD8Tcells)$RNA
+act_cytx <- c("CD47", "CD69","TNFRSF9", "CD28", "ISG15","ISG20",  "OAS1", "LY6E", "IFI6","MX1", "OAS1", "OASL", "IFNG","GZMB","GZMA","GZMH", "GZMK",  "NKG7", "IL2RB","PRF1", "ISG15", "KLRB1", "PRF1", "PDCD1", "LAG3", "TIGIT")
+gene <- intersect(rownames(ave), act_cytx)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+cytotoxic_exhaustion <-c("IFNG","GZMB", "CCR7",  "NKG7", "IL2RB","PTPRC",  "PRF1", "HMGB1", "KLRB1",  "PDCD1", "LAG3", "TNFSF14", "KLRG1" )
+gene <- intersect(rownames(ave), cytotoxic_exhaustion)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+
+#ISG15
+lamin_CD8Tcells$ISG15exp <- count[,"ISG15"]
+lamin_CD8Tcells$ISG15_level <- "NA"
+lamin_CD8Tcells$ISG15_level[which(lamin_CD8Tcells$ISG15exp < 0.5)] <- "ISG15 Low"
+lamin_CD8Tcells$ISG15_level[which(lamin_CD8Tcells$ISG15exp > 0.5)] <- "ISG15 High"
+table(lamin_CD8Tcells$ISG15_level)
+DefaultAssay(lamin_CD8Tcells) <- "RNA"
+Idents(lamin_CD8Tcells) <- "ISG15_level"
+levels(lamin_CD8Tcells)
+levels(lamin_CD8Tcells)<- c("ISG15 Low", "ISG15 High")
+VlnPlot(lamin_CD8Tcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+#PRF1
+lamin_CD8Tcells$PRF1exp <- count[,"PRF1"]
+lamin_CD8Tcells$PRF1_level <- "NA"
+lamin_CD8Tcells$PRF1_level[which(lamin_CD8Tcells$PRF1exp < 0.5)] <- "PRF1 Low"
+lamin_CD8Tcells$PRF1_level[which(lamin_CD8Tcells$PRF1exp > 0.5)] <- "PRF1 High"
+table(lamin_CD8Tcells$PRF1_level)
+DefaultAssay(lamin_CD8Tcells) <- "RNA"
+Idents(lamin_CD8Tcells) <- "PRF1_level"
+levels(lamin_CD8Tcells)
+levels(lamin_CD8Tcells)<- c("PRF1 Low", "PRF1 High")
+VlnPlot(lamin_CD8Tcells, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+
+
+### suppl.3 CD4 ########
+
+CD4T<- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 4/CD4 T cells/CD4T.rds")
+CD4T <- FindVariableFeatures(CD4T, selection.method = "vst", nfeatures = 2000)
+CD4T<- ScaleData(object = CD4T, verbose = FALSE)
+CD4T<- RunPCA(object = CD4T, npcs = 30, verbose = FALSE)
+CD4T<- RunUMAP(object = CD4T, reduction = "pca", dims = 1:20) 
+CD4T<- FindNeighbors(object = CD4T, reduction = "pca", dims = 1:20)
+CD4T<- FindClusters(CD4T, resolution = 0.3)
+DimPlot(CD4T, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 10) +  theme(text = element_text(size = 25)) + NoLegend()
+DefaultAssay(CD4T) <- "RNA"
+CD4T <- RunTSNE(object = CD4T, check_duplicates = FALSE)
+DimPlot(object = CD4T, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 10, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+new.cluster.ids <-c("Naive CD4+ T","Effector CD4+ T","Central Mem. CD4+ T","Effector Mem. CD4+ T", "Naive CD4+ T", "Cytotoxic CD4+ T", "Cytotoxic CD4+ T")
+names(new.cluster.ids) <- levels(CD4T)
+CD4T <- RenameIdents(CD4T, new.cluster.ids)
+CD4T <- RunTSNE(object = CD4T)
+DimPlot(object = CD4T, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 13, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+ggsave("pic1.png", height = 7, width = 10)
+VlnPlot(CD4T, features = c("CD47"), pt.size = 0, raster=FALSE)+NoLegend()+ theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.text.y = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+RidgePlot(CD4T, features = c( "CD3D"), ncol = NULL) + NoLegend() + theme(title = element_text(size = 20)) + theme(axis.text.y = element_text(size = 25) ) + theme(axis.title.y = element_blank()) +theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20) )
+
+###### Figure 5 ##########
+
+library(Seurat)
+library(SeuratObject)
+library(dplyr)
+library(pheatmap)
+library(BiocManager)
+library(multtest)
+library(metap)
+library(limma)
+library(ggplot2)
+library(cowplot)
+theme_set(theme_cowplot())
+library(Signac)
+library(monocle3)
+library(Matrix)
+library(patchwork)
+B_cells <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 5/B_cells.rds")
+B_cells <- ScaleData(object = B_cells, verbose = FALSE)
+B_cells <- RunPCA(object = B_cells, npcs = 30, verbose = FALSE)
+B_cells <- RunUMAP(object = B_cells, reduction = "pca", dims = 1:20) 
+B_cells <- FindNeighbors(object = B_cells, reduction = "pca", dims = 1:20)
+B_cells <- FindClusters(B_cells, resolution = 0.3)
+DimPlot(B_cells, reduction = "umap", label = TRUE, repel = TRUE , raster=FALSE, label.size = 8)+  theme(text = element_text(size = 15)) + NoLegend()
+new.cluster.ids <-c("IgM Mem. B cells","Classical Mem. B cells","Naive B cells","Transitional B cells","Classical Mem. B cells", "Double neg. B cells", "Naive B cells")
+names(new.cluster.ids) <- levels(B_cells)
+B_cells <- RenameIdents(B_cells, new.cluster.ids)
+B_cells <- RunTSNE(object = B_cells)
+DimPlot(object = B_cells, reduction = "tsne", label = TRUE, repel = TRUE,  label.size = 13, pt.size = 2) + theme(text = element_text(size = 25)) + NoLegend()
+DefaultAssay(B_cells) <- "RNA"
+VlnPlot(B_cells, features = c("CD47"), pt.size = 0, raster=FALSE) + NoLegend() + theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20)) + theme(axis.title.y = element_text(size = 20))
+RidgePlot(B_cells, features = c( "IGHM"), ncol = NULL) + NoLegend() + theme(title = element_text(size = 20)) + theme(axis.text.y = element_text(size = 25) ) + theme(axis.title.y = element_blank()) +theme(axis.title.x = element_blank()) + theme(axis.text.x = element_text(size = 20) )
+DefaultAssay(B_cells) <- "RNA"
+
+count <- t(as.data.frame(B_cells@assays$RNA@data))
+B_cells$CD47exp <- count[,"CD47"]
+B_cells$CD47_level <- "NA"
+B_cells$CD47_level[which(B_cells$CD47exp < 0.5)] <- "CD47 Low"
+B_cells$CD47_level[which((B_cells$CD47exp > 0.5) & (B_cells$CD47exp < 1.5))] <- "CD47 Inter."
+B_cells$CD47_level[which(B_cells$CD47exp > 1.5)] <- "CD47 High"
+table(B_cells$CD47_level)
+DefaultAssay(B_cells) <- "RNA"
+Idents(B_cells) <- "CD47_level"
+levels(B_cells)
+levels(B_cells)<- c("CD47 Low", "CD47 Inter.", "CD47 High")
+VlnPlot(B_cells, "CD47")
+Bcell_genes <- c("MS4A1", "TNFRSF17","CD274",  "PIGS", "DERL3", "CD19", "CD22", "TCL1A", "CD83", "CD37", "CD79B", "MZB1",   "CD40", "CD80",  "IGHM", "IGHD", "TLR9","STAT1", "STAT2", "IRF7", "ISG15", "LY6E", "IFI6", "ISG20", "MX1", "OAS1", "OAS2", "HLA-DRA", "HLA-DMA", "HLA-C", "HLA-E", "HLA-B", "B2M",  "SLAMF7")
+DotPlot(B_combinedb, features = Bcell_genes, cols = c("blue", "red", "green"), dot.scale = 15, group.by= "CD47_level") + RotatedAxis()+ theme(axis.text = element_text(size = 25)) + theme(axis.title.x = element_blank())+theme(axis.title.y = element_blank())
+ave <- AverageExpression(B_combinedb)$RNA
+gene <- intersect(rownames(ave), Bcell_genes)
+ave_lamin <- ave[gene,]
+colfunc<-colorRampPalette(c("blue3","gray96","red3"))
+pheatmap(ave_lamin, col=(colfunc(100)), scale="row",border_color=NA, fontsize = 20,cluster_cols = FALSE)
+
+#### DEGs and ontology #####
+
+CD47lo_CD47hi <- FindMarkers(B_combined, ident.1 = "CD47 High", ident.2 = "CD47 Low", min.pct = 0, logfc.threshold = 0)
+saveRDS(CD47lo_CD47hi, file = "C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 5/Figure 5b/CD47lo_CD47hi.rds" )
+CD47lo_CD47hi <- readRDS("C:/Users/au672897/Desktop/CD47 project/Figure files/Figure 5/Figure 5b/CD47lo_CD47hi.rds")
+EnhancedVolcano(CD47lo_CD47hi, lab = rownames(CD47lo_CD47hi), x = "avg_log2FC", y = "p_val_adj", xlab = bquote(~avg_Log[2]~ 'fold change'),  title = "B cells CD47 high vs CD47 low", subtitle = bquote(italic("avg_log2FC")), labSize = 7, pointSize = 2, axisLabSize=30, titleLabSize=25, subtitleLabSize=20, captionLabSize=15, legendPosition = "none", pCutoff = 10e-10,  FCcutoff = 0.05, col=c('grey', 'grey', 'grey', 'red3'), colAlpha = 0.9, xlim = c(-1, 1),ylim = c(0,310))
+
+top100_CD47lo_CD47hi <- slice_max(CD47lo_CD47hi, n = 100, order_by = avg_log2FC)
+top100gene_CD47lo_CD47hi <- rownames(top100_CD47lo_CD47hi)
+top100gene_CD47lo_CD47hi
+go_enrich <- enrichGO(gene =top100gene_CD47lo_CD47hi , OrgDb = "org.Hs.eg.db",  keyType = 'SYMBOL', readable = T, ont = "BP", pvalueCutoff = 0.05, qvalueCutoff = 0.05)
+barplot(go_enrich, showCategory = 20, color = "p.adjust", title = "CD47 High ") 
+
+write.csv(go_enrich,"GO.csv")
+go_enrich@result
+go_enrich@result %>% head()
+
+go_enrich@result %>%
+  filter(Description== "cellular response to type I interferon" |
+           Description=="B cell receptor signaling pathway" | 
+           Description=="positive regulation of B cell activation"|
+           Description== "antigen receptor-mediated signaling pathway" |
+           Description=="humoral immune response" |
+           Description=="immunoglobulin mediated immune response" |
+           Description=="antimicrobial humoral response" |
+           Description=="regulation of viral life cycle" |
+           Description=="complement activation, classical pathway" |
+           Description=="cellular response to type I interferon" |
+           Description=="lymphocyte mediated immunity"|
+           Description=="positive regulation of cell activation" |
+           Description=="cellular response to type I interferon" |
+           Description=="lymphocyte mediated immunity"|
+           Description=="response to interferon-beta"|
+           Description=="response to interferon-beta"|
+           Description=="activation of immune response"|
+           Description=="response to chemokine"|
+           Description=="cellular response to interferon-gamma" |
+           Description=="programmed necrotic cell death" |
+           Description==" activation of immune response " |
+           Description=="chemokine-mediated signaling pathway"   )%>%
+  arrange(desc(p.adjust)) %>%
+  ggplot(aes(y=factor(Description), x= Count, fill= p.adjust)) +
+  geom_bar(stat = "identity", width = 0.7, size=20)  + 
+  theme(axis.text.y = element_text(size=20),
+        axis.title.y = element_blank()) +
+  scale_fill_gradient (low= "blue", high= "red") +
+  ggtitle("B cells CD47 high vs CD47 low") + theme(title = element_text(size = 25))
+
+
